@@ -1,3 +1,4 @@
+# Testing Auto Deploy
 app_name = "ci_cd"
 app_title = "CI-CD App"
 app_publisher = "chandru@tech4goodcommunity.com"
