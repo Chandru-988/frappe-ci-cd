@@ -1,48 +1,61 @@
-#HEllo
-name: Frappe CI/CD - Staging
+name: Frappe CI/CD – Staging
 
 on:
   push:
     branches:
-      - staging
+      - main   # change if you want staging branch
+  workflow_dispatch:   # allows manual trigger too
 
 jobs:
-  deploy:
+  ci:
+    name: CI Checks
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository (trigger only)
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH
+      - name: Basic sanity check
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+          echo "CI step passed"
+          # You can add lint/tests later
 
-      - name: Deploy to Frappe Server
-        run: |
-          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.SERVER_IP }} << 'EOF'
+  deploy:
+    name: Deploy to Staging
+    needs: ci
+    runs-on: ubuntu-latest
+
+    # 🔐 THIS is what triggers approval
+    environment: staging
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: frappe
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
             set -e
 
-            sudo -u frappe bash -lc '
-              echo "➡️ Entering bench"
-              cd /home/frappe/frappe-bench
+            echo "🔹 Switching to bench directory"
+            cd /home/frappe/frappe-bench
 
-              echo "➡️ Updating app (staging branch)"
-              cd apps/${{ secrets.FRAPPE_APP }}
-              git fetch origin
-              git checkout staging
-              git pull origin staging
+            echo "🔹 Loading frappe environment"
+            source /home/frappe/.bashrc
 
-              echo "➡️ Migrating"
-              cd /home/frappe/frappe-bench
-              bench migrate
+            echo "🔹 Verifying bench"
+            which bench
+            bench --version
 
-              echo "➡️ Restarting"
-              bench restart
+            echo "🔹 Pulling latest code"
+            git pull origin main
 
-              echo "✅ CI/CD deploy finished"
-            '
-          EOF
+            echo "🔹 Running migrations"
+            bench migrate
+
+            echo "🔹 Restarting services"
+            bench restart
+
+            echo "✅ Deployment completed successfully"
