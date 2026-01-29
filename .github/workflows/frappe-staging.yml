@@ -1,62 +1,45 @@
-#nEW SET
-name: Frappe CI/CD – Staging
+#GOOD
+
+name: Frappe CI/CD - Staging
 
 on:
   push:
     branches:
-      - staging   # change if you want staging branch
-  workflow_dispatch:   # allows manual trigger too
+      - staging
 
 jobs:
-  ci:
-    name: CI Checks
+  deploy:
     runs-on: ubuntu-latest
 
+    environment:
+      name: staging   # 👈 THIS ENABLES APPROVAL
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository (trigger only)
         uses: actions/checkout@v4
 
-      - name: Basic sanity check
+      - name: Setup SSH
         run: |
-          echo "CI step passed"
-          # You can add lint/tests later
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
-  deploy:
-    name: Deploy to Staging
-    needs: ci
-    runs-on: ubuntu-latest
-
-    # 🔐 THIS is what triggers approval
-    environment: staging
-
-    steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: frappe
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script: |
+      - name: Deploy to Frappe Server
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.SERVER_IP }} << 'EOF'
             set -e
 
-            echo "🔹 Switching to bench directory"
-            cd /home/frappe/frappe-bench
+            sudo -u frappe bash -lc '
+              cd /home/frappe/frappe-bench
 
-            echo "🔹 Loading frappe environment"
-            source /home/frappe/.bashrc
+              cd apps/${{ secrets.FRAPPE_APP }}
+              git fetch origin
+              git checkout staging
+              git pull origin staging
 
-            echo "🔹 Verifying bench"
-            which bench
-            bench --version
-
-            echo "🔹 Pulling latest code"
-            git pull origin main
-
-            echo "🔹 Running migrations"
-            bench migrate
-
-            echo "🔹 Restarting services"
-            bench restart
-
-            echo "✅ Deployment completed successfully"
+              cd /home/frappe/frappe-bench
+              bench migrate
+              bench restart
+            '
+          EOF
