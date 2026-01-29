@@ -22,11 +22,19 @@ jobs:
 
     - name: Deploy to Frappe Server
       run: |
-        ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
+        ssh -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << EOF
           set -e
           cd ${{ secrets.BENCH_PATH }}
-          bench update --apps ${{ secrets.FRAPPE_APP }} --no-backup
-          bench migrate
-          bench restart
-        EOF
 
+          echo "=== Updating Frappe App ==="
+          bench update --apps ${{ secrets.FRAPPE_APP }} --no-backup
+
+          echo "=== Running Migrations ==="
+          bench migrate
+
+          echo "=== Restarting Bench ==="
+          bench restart
+
+          echo "=== Deployment Completed Successfully ==="
+        EOF
