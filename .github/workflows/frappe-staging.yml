@@ -16,32 +16,32 @@ jobs:
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
       - name: Deploy to Frappe Server
         run: |
-          ssh ubuntu@${{ secrets.SERVER_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.SERVER_IP }} << 'EOF'
             set -e
 
             sudo -u frappe bash -lc '
-              echo "➡️ Moving to bench directory"
+              echo "➡️ Entering bench"
               cd /home/frappe/frappe-bench
 
-              echo "➡️ Updating app code (staging branch)"
+              echo "➡️ Updating app (staging branch)"
               cd apps/${{ secrets.FRAPPE_APP }}
               git fetch origin
               git checkout staging
               git pull origin staging
 
-              echo "➡️ Running database migrations"
+              echo "➡️ Migrating"
               cd /home/frappe/frappe-bench
               bench migrate
 
-              echo "➡️ Restarting Frappe services"
+              echo "➡️ Restarting"
               bench restart
 
-              echo "✅ Staging deployment completed successfully"
+              echo "✅ CI/CD deploy finished"
             '
           EOF
