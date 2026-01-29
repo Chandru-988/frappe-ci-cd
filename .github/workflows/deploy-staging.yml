@@ -1,0 +1,43 @@
+name: Frappe CI/CD - Staging
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: staging   # 👈 THIS ENABLES APPROVAL
+
+    steps:
+      - name: Checkout repository (trigger only)
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to Frappe Server
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.SERVER_IP }} << 'EOF'
+            set -e
+
+            sudo -u frappe bash -lc '
+              cd /home/frappe/frappe-bench
+
+              cd apps/${{ secrets.FRAPPE_APP }}
+              git fetch origin
+              git checkout staging
+              git pull origin staging
+
+              cd /home/frappe/frappe-bench
+              bench migrate
+              bench restart
+            '
+          EOF
